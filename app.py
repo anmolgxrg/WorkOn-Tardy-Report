@@ -8,6 +8,8 @@ import tempfile
 import matplotlib.pyplot as plt
 import base64
 
+st.set_page_config(layout="wide", page_title="Tardy Report - HFS Technical Service", page_icon="/logo.png")
+
 DATA_FILE = 'late_punch_data.xlsx'
 
 # Load or create the initial data
@@ -31,7 +33,7 @@ def create_download_link(file_path, file_label):
 # Initialize data
 data = load_data()
 
-st.title('Employee Late Punch Report Visualizer')
+st.title('Tardy Report for HFS Technical Service')
 
 # Create tabs for navigation
 tabs = st.tabs(["Upload and Visualize Data", "Enter Data", "View Data"])
