@@ -12,12 +12,14 @@ st.set_page_config(layout="wide", page_title="Tardy Report - HFS Technical Servi
 
 DATA_FILE = 'late_punch_data.xlsx'
 
-# Load or create the initial data
+# Load the updated data from Excel file with multiple sheets
 def load_data():
     if os.path.exists(DATA_FILE):
-        return pd.read_excel(DATA_FILE)
+        sheets = pd.read_excel(DATA_FILE, sheet_name=None)
+        combined_data = pd.concat(sheets.values(), ignore_index=True)
+        return combined_data
     else:
-        return pd.DataFrame(columns=['Name', 'Date', 'Minutes Late'])
+        return pd.DataFrame(columns=['Name', 'Date', 'Minutes Late', 'Manager'])
 
 def save_data(df):
     df.to_excel(DATA_FILE, index=False)
@@ -30,8 +32,88 @@ def create_download_link(file_path, file_label):
     href = f'<a href="data:file/pdf;base64,{b64}" download="{file_label}">Download PDF Report</a>'
     return href
 
+# Employee groups
+employee_groups = {
+    "Craig Cook": [
+        "Paige Kruger",
+        "Athan Spanos",
+        "Jerwin Orendain",
+        "Gerard McLaughlin",
+        "Kristen Reisinger"
+    ],
+    "Paige Kruger": [
+        "Claudio Tarallo",
+        "Kathleen Greenleaf",
+        "Stacy O'Connor",
+        "Jeffrey Furlow",
+        "Karna Karki",
+        "Jeff Roman",
+        "Julie Tanczos",
+        "Robert Louder",
+        "Sammi Atland",
+        "Susan Hook-Smeal",
+        "Delores Kohler",
+        "Reginald Fields"
+    ],
+    "Claudio Tarallo": [
+        "Justin Schultz",
+        "Chelsea Haylett",
+        "Darlene Gratkowski",
+        "Paula Cramer",
+        "Kirk Beard",
+        "Daniel Sokalczuk",
+        "Rhiannon Lorenez",
+        "Neiby Gomez"
+    ],
+    "Gerard McLaughlin": [
+        "Steve Russell",
+        "Kerry Dreibelbis",
+        "Ted Verbinski",
+        "Terry Rabuck",
+        "Stoy Sunday"
+    ],
+    "Athan Spanos": [
+        "Paul Motter",
+        "David Cramer",
+        "John Lay",
+        "Emily Getz",
+        "Ryan Dann",
+        "Eli Schott",
+        "Madison Cooper",
+        "Phillip Ponsole"
+    ],
+    "Jerwin Orendain": [
+        "Connor Campbell",
+        "Ginny Miller",
+        "Julie McNamara"
+    ]
+}
+
+# Function to assign managers based on employee_groups
+def assign_managers(df):
+    manager_col = []
+    for name in df['Name']:
+        assigned = False
+        for manager, employees in employee_groups.items():
+            if name in employees:
+                manager_col.append(manager)
+                assigned = True
+                break
+        if not assigned:
+            manager_col.append(None)
+    df['Manager'] = manager_col
+    return df
+
+# Function to get the manager for a given employee
+def get_manager(employee_name):
+    for manager, employees in employee_groups.items():
+        if employee_name in employees:
+            return manager
+    return None
+
 # Initialize data
 data = load_data()
+data = assign_managers(data)
 
 st.title('Tardy Report for HFS Technical Service')
 
@@ -46,13 +128,13 @@ with tabs[0]:
     df['Date'] = pd.to_datetime(df['Date'])
 
     # Select time period
-    time_option = st.selectbox("Select Time Period", ["Specific Date", "Specific Week", "Life to Date (LTD)"])
+    time_option = st.selectbox("Select Time Period", ["Specific Date", "Specific Week", "Life to Date (LTD)"], key='time_period')
 
     if time_option == "Specific Date":
-        selected_date = st.date_input("Select Date")
+        selected_date = st.date_input("Select Date", key='specific_date')
         filtered_df = df[df['Date'] == pd.to_datetime(selected_date)]
     elif time_option == "Specific Week":
-        selected_week = st.date_input("Select Week")
+        selected_week = st.date_input("Select Week", key='specific_week')
         start_of_week = pd.to_datetime(selected_week - datetime.timedelta(days=selected_week.weekday()))
         end_of_week = start_of_week + datetime.timedelta(days=6)
         filtered_df = df[(df['Date'] >= start_of_week) & (df['Date'] <= end_of_week)]
@@ -85,6 +167,22 @@ with tabs[0]:
                 fig.update_traces(line=dict(color='rgb(255, 127, 14)', width=2), marker=dict(color='rgb(255, 127, 14)', size=6))
                 fig.update_layout(title_font_size=20, xaxis_title_font_size=16, yaxis_title_font_size=16, template='plotly_white')
                 st.plotly_chart(fig)
+
+        # Generate graphs for total minutes late by manager and total number of tardy employees by manager
+        manager_minutes_late = filtered_df.groupby('Manager')['Minutes Late'].sum().sort_values(ascending=False)
+        tardy_employees_by_manager = filtered_df.groupby('Manager')['Name'].nunique().sort_values(ascending=False)
+
+        st.subheader("Total Late Minutes by Manager")
+        fig3 = px.bar(manager_minutes_late, labels={'value':'Total Late Minutes', 'index':'Manager'}, title='Total Late Minutes by Manager')
+        fig3.update_traces(marker_color='rgb(26, 118, 255)')
+        fig3.update_layout(title_font_size=20, xaxis_title_font_size=16, yaxis_title_font_size=16, template='plotly_white')
+        st.plotly_chart(fig3)
+
+        st.subheader("Total Number of Tardy Employees by Manager")
+        fig4 = px.bar(tardy_employees_by_manager, labels={'value':'Number of Tardy Employees', 'index':'Manager'}, title='Total Number of Tardy Employees by Manager')
+        fig4.update_traces(marker_color='rgb(55, 83, 109)')
+        fig4.update_layout(title_font_size=20, xaxis_title_font_size=16, yaxis_title_font_size=16, template='plotly_white')
+        st.plotly_chart(fig4)
 
         # Generate a collage of line plots
         num_employees = len(unique_employees)
@@ -127,6 +225,15 @@ with tabs[0]:
                 pdf.image(tmpfile2.name, x=10, y=30, w=190)
 
             pdf.add_page()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile3:
+                fig3.write_image(tmpfile3.name)
+                pdf.image(tmpfile3.name, x=10, y=30, w=190)
+            pdf.add_page()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile4:
+                fig4.write_image(tmpfile4.name)
+                pdf.image(tmpfile4.name, x=10, y=30, w=190)
+
+            pdf.add_page()
             pdf.image(collage_path, x=10, y=30, w=190)
 
             pdf_output = 'Employee_Late_Punch_Report.pdf'
@@ -141,30 +248,61 @@ with tabs[1]:
 
     # Form to enter new data
     with st.form(key='late_punch_form'):
-        name = st.selectbox("Employee Name", options=list(data['Name'].unique()) + ['Other'])
+        name = st.selectbox("Employee Name", options=[x for x in data['Name'].unique() if pd.notna(x)] + ['Other'], key='employee_name')
         if name == 'Other':
-            name = st.text_input("Enter Employee Name")
+            name = st.text_input("Enter Employee Name", key='new_employee_name')
+        
+        if name != 'Other':
+            manager = get_manager(name)
+        else:
+            manager = st.text_input("Enter Manager", key='new_manager_name')
 
-        date = st.date_input("Date")
-        minutes_late = st.number_input("Minutes Late", min_value=0)
+        st.text_input("Manager", value=manager, key='entry_manager', disabled=True)
+
+        date = st.date_input("Date", key='entry_date')
+        minutes_late = st.number_input("Minutes Late", min_value=0, key='entry_minutes_late')
 
         submit_button = st.form_submit_button(label='Submit')
 
         if submit_button:
+            if name == 'Other':
+                name = st.session_state['new_employee_name']
+                manager = st.session_state['new_manager_name']
+            else:
+                manager = get_manager(name)
+
             # Add new data to the dataframe
             new_data = pd.DataFrame({
                 'Name': [name],
                 'Date': [date],
-                'Minutes Late': [minutes_late]
+                'Minutes Late': [minutes_late],
+                'Manager': [manager]
             })
             updated_df = pd.concat([data, new_data], ignore_index=True)
 
             # Save updated dataframe to Excel
             save_data(updated_df)
             data = load_data()
+            data = assign_managers(data)
 
             st.success(f'Data for {name} added successfully!')
 
 with tabs[2]:
-    st.header('View Late Punch Data')
+    st.header('View Data')
+    
+    if st.checkbox('Show raw data', key='show_raw_data'):
+        st.dataframe(data)
+
+    st.subheader('Delete Entries')
+    if not data.empty:
+        selected_rows = st.multiselect('Select rows to delete', data.index, key='delete_rows')
+        if st.button('Delete selected rows'):
+            if selected_rows:
+                data = data.drop(selected_rows)
+                save_data(data)
+                st.success('Selected rows have been deleted.')
+            else:
+                st.warning('No rows selected.')
+
+    st.subheader('Current Data')
     st.dataframe(data)
