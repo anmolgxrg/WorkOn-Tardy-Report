@@ -17,12 +17,14 @@ def load_data():
     if os.path.exists(DATA_FILE):
         sheets = pd.read_excel(DATA_FILE, sheet_name=None)
         combined_data = pd.concat(sheets.values(), ignore_index=True)
-        return combined_data
+        return sheets, combined_data
     else:
-        return pd.DataFrame(columns=['Name', 'Date', 'Minutes Late', 'Manager'])
+        return {}, pd.DataFrame(columns=['Name', 'Date', 'Minutes Late', 'Manager'])
 
-def save_data(df):
-    df.to_excel(DATA_FILE, index=False)
+def save_data(sheets):
+    with pd.ExcelWriter(DATA_FILE) as writer:
+        for manager, df in sheets.items():
+            df.to_excel(writer, sheet_name=manager, index=False)
 
 # Function to create download link for PDF
 def create_download_link(file_path, file_label):
@@ -112,7 +114,7 @@ def get_manager(employee_name):
     return None
 
 # Initialize data
-data = load_data()
+sheets, data = load_data()
 data = assign_managers(data)
 
 st.title('Tardy Report for HFS Technical Service')
@@ -252,11 +254,7 @@ with tabs[1]:
         if name == 'Other':
             name = st.text_input("Enter Employee Name", key='new_employee_name')
         
-        if name != 'Other':
-            manager = get_manager(name)
-        else:
-            manager = st.text_input("Enter Manager", key='new_manager_name')
-
+        manager = get_manager(name) if name != 'Other' else st.text_input("Enter Manager", key='new_manager_name')
         st.text_input("Manager", value=manager, key='entry_manager', disabled=True)
 
         date = st.date_input("Date", key='entry_date')
@@ -271,18 +269,25 @@ with tabs[1]:
             else:
                 manager = get_manager(name)
 
-            # Add new data to the dataframe
+            # Add new data to the corresponding manager's sheet
+            if manager in sheets:
+                manager_df = sheets[manager]
+            else:
+                manager_df = pd.DataFrame(columns=['Name', 'Date', 'Minutes Late', 'Manager'])
+
             new_data = pd.DataFrame({
                 'Name': [name],
                 'Date': [date],
                 'Minutes Late': [minutes_late],
                 'Manager': [manager]
             })
-            updated_df = pd.concat([data, new_data], ignore_index=True)
+
+            updated_manager_df = pd.concat([manager_df, new_data], ignore_index=True)
+            sheets[manager] = updated_manager_df
 
             # Save updated dataframe to Excel
-            save_data(updated_df)
-            data = load_data()
+            save_data(sheets)
+            sheets, data = load_data()
             data = assign_managers(data)
 
             st.success(f'Data for {name} added successfully!')
@@ -299,7 +304,10 @@ with tabs[2]:
         if st.button('Delete selected rows'):
             if selected_rows:
                 data = data.drop(selected_rows)
-                save_data(data)
+                manager_groups = data.groupby('Manager')
+                for manager, group in manager_groups:
+                    sheets[manager] = group.drop(columns=['Manager'])
+                save_data(sheets)
                 st.success('Selected rows have been deleted.')
             else:
                 st.warning('No rows selected.')
