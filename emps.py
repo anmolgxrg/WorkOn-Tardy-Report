@@ -10,7 +10,7 @@ employee_groups = {
         "Claudio Tarallo",
         "Kathleen Greenleaf",
         "Stacy O'Connor",
-        "Jeffrey Furlow",
+        "Jeffey Furlow",
         "Karna Karki",
         "Jeff Roman",
         "Julie Tanczos",

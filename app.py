@@ -254,8 +254,8 @@ with tabs[1]:
         if name == 'Other':
             name = st.text_input("Enter Employee Name", key='new_employee_name')
         
-        manager = get_manager(name) if name != 'Other' else st.text_input("Enter Manager", key='new_manager_name')
-        st.text_input("Manager", value=manager, key='entry_manager', disabled=True)
+        # manager = get_manager(name) if name != 'Other' else st.text_input("Enter Manager", key='new_manager_name')
+        # st.text_input("Manager", value=manager, key='entry_manager', disabled=True)
 
         date = st.date_input("Date", key='entry_date')
         minutes_late = st.number_input("Minutes Late", min_value=0, key='entry_minutes_late')
@@ -292,12 +292,7 @@ with tabs[1]:
 
             st.success(f'Data for {name} added successfully!')
 
-with tabs[2]:
-    st.header('View Data')
-    
-    if st.checkbox('Show raw data', key='show_raw_data'):
-        st.dataframe(data)
-
+with tabs[2]:    
     st.subheader('Delete Entries')
     if not data.empty:
         selected_rows = st.multiselect('Select rows to delete', data.index, key='delete_rows')
@@ -312,5 +307,9 @@ with tabs[2]:
             else:
                 st.warning('No rows selected.')
 
-    st.subheader('Current Data')
-    st.dataframe(data)
+
+    st.subheader('Data')
+    combined_data = pd.concat(sheets.values(), ignore_index=True)
+    combined_data_sorted = combined_data.sort_values(by='Name')
+    combined_data_sorted = assign_managers(combined_data_sorted)
+    st.dataframe(combined_data_sorted)
